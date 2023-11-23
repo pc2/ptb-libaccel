@@ -21,14 +21,12 @@
 program test
 
    use accel_lib
-   use omp_lib, only: omp_get_wtime
    use, intrinsic :: iso_fortran_env, only: real64, real32, int32
    implicit none
 
    integer, parameter :: dim = 1024
 
    integer(kind=int32) :: err
-   real(kind=real64) :: tStart, duration
    type(cuda_context) :: ctx, anotherctx
 
    ! For testing cuda_dsyevd
@@ -173,13 +171,10 @@ program test
 
    print *, "Computing eigendecomposition..."
    eigvecs = M
-   tStart = omp_get_wtime()
    call cuda_dsyevd(ctx, dim, eigvecs, eigvals, err)
-   duration = omp_get_wtime() - tStart
    if (err /= 0) then
       stop "An error occured in the CUDA accelerated code."
    end if
-   print *, "Duration of accelerated dsyevd:", duration
 
    print *, "Computing inverse based on decomposition..."
    do j = 1, dim
@@ -187,24 +182,18 @@ program test
          Minv(i, j) = 1.0_real64/eigvals(j)*eigvecs(i, j)
       end do
    end do
-   tStart = omp_get_wtime()
    call cuda_dgemm(ctx, 'N', 'T', dim, dim, dim, 1.0_real64, Minv, eigvecs, &
                    0.0_real64, Minv, err)
-   duration = omp_get_wtime() - tStart
    if (err /= 0) then
       stop "An error occured in the CUDA accelerated code."
    end if
-   print *, "Duration of accelerated dgemm:", duration
 
    print *, "Computing identity based on matrix and its inverse..."
-   tStart = omp_get_wtime()
    call cuda_dgemm(ctx, 'N', 'N', dim, dim, dim, 1.0_real64, M, Minv, &
                    0.0_real64, identity, err)
-   duration = omp_get_wtime() - tStart
    if (err /= 0) then
       stop "An error occured in the CUDA accelerated code."
    end if
-   print *, "Duration of accelerated dgemm:", duration
 
    error = 0.0_real64
    do j = 1, dim

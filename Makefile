@@ -9,7 +9,7 @@ cuda: libaccel_cuda.so
 all: test.x test_c.x cuda
 
 test.x: test.o accel_lib.o libaccel.so
-	$(FC) $(FCFLAGS) -fopenmp -Wl,--rpath=. -L. -o test.x test.o accel_lib.o -laccel
+	$(FC) $(FCFLAGS) -Wl,--rpath=. -L. -o test.x test.o accel_lib.o -laccel
 
 test.o: test.f90 accel_lib.o
 	$(FC) $(FCFLAGS) -c test.f90
