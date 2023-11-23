@@ -123,8 +123,10 @@ static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
   data_type *d_B = nullptr;
   data_type *d_C = nullptr;
 
-  decltype(std::chrono::high_resolution_clock::now()) tStart, tEnd,
-      tStart_total, tEnd_total;
+  decltype(std::chrono::high_resolution_clock::now()) tStart_total, tEnd_total;
+  cudaEvent_t eStart = nullptr;
+  cudaEvent_t eEnd = nullptr;
+  float eTime;
 
   /* print input data
   std::cout << trans_a << " " << trans_b << " " << m << " " << n << " " << k
@@ -168,7 +170,9 @@ static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
 
     if (TIMINGS) {
       throwOnErr(cudaStreamSynchronize(stream));
-      tStart = std::chrono::high_resolution_clock::now();
+      throwOnErr(cudaEventCreate(&eStart));
+      throwOnErr(cudaEventCreate(&eEnd));
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
     throwOnErr(cudaMemcpyAsync(d_A, A, sizeof(data_type) * lda * k,
@@ -182,13 +186,11 @@ static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
     }
 
     if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
       throwOnErr(cudaStreamSynchronize(stream));
-      tEnd = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-      std::cerr << "...CUBLAS Host To Device: " << 1.0 / 1000 * duration.count()
-                << " seconds" << std::endl;
-      tStart = std::chrono::high_resolution_clock::now();
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUBLAS Host To Device: " << eTime << " ms" << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
     if constexpr (std::is_same_v<data_type, double>) {
@@ -202,13 +204,11 @@ static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
     }
 
     if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
       throwOnErr(cudaStreamSynchronize(stream));
-      tEnd = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-      std::cerr << "...CUBLAS GEMM: " << 1.0 / 1000 * duration.count()
-                << " seconds" << std::endl;
-      tStart = std::chrono::high_resolution_clock::now();
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUBLAS GEMM: " << eTime << " ms" << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
     throwOnErr(cudaMemcpyAsync(C, d_C, sizeof(data_type) * ldc * n,
@@ -217,17 +217,23 @@ static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
     throwOnErr(cudaStreamSynchronize(stream));
 
     if (TIMINGS) {
-      tEnd = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-      std::cerr << "...CUBLAS Device to Host: " << 1.0 / 1000 * duration.count()
-                << " seconds" << std::endl;
+      throwOnErr(cudaEventRecord(eEnd, stream));
+      throwOnErr(cudaStreamSynchronize(stream));
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUBLAS Device to Host: " << eTime << " ms" << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
   } catch (std::runtime_error &ex) {
     std::cerr << ex.what() << std::endl;
     *err = 1;
   }
+
+  if (eStart)
+    *err |= cudaEventDestroy(eStart);
+
+  if (eEnd)
+    *err |= cudaEventDestroy(eEnd);
 
   if (d_A)
     *err |= cudaFree(d_A);
@@ -242,8 +248,8 @@ static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
     tEnd_total = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         tEnd_total - tStart_total);
-    std::cerr << "...Total time spent in C++ function: "
-              << 1.0 / 1000 * duration.count() << " seconds" << std::endl;
+    std::cerr << "...Total time spent in C++ function: " << duration.count()
+              << " ms" << std::endl;
   }
 }
 
@@ -261,8 +267,10 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
   size_t h_lwork = 0;
   void *h_work = nullptr;
 
-  decltype(std::chrono::high_resolution_clock::now()) tStart, tEnd,
-      tStart_total, tEnd_total;
+  decltype(std::chrono::high_resolution_clock::now()) tStart_total, tEnd_total;
+  cudaEvent_t eStart = nullptr;
+  cudaEvent_t eEnd = nullptr;
+  float eTime;
 
   *err = 0;
 
@@ -293,19 +301,20 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
 
     if (TIMINGS) {
       throwOnErr(cudaStreamSynchronize(stream));
-      tStart = std::chrono::high_resolution_clock::now();
+      throwOnErr(cudaEventCreate(&eStart));
+      throwOnErr(cudaEventCreate(&eEnd));
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
     throwOnErr(cudaMemcpyAsync(d_A, A, sizeof(data_type) * n * lda,
                                cudaMemcpyHostToDevice, stream));
 
     if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
       throwOnErr(cudaStreamSynchronize(stream));
-      tEnd = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-      std::cerr << "...CUSOLVER Host To Device: "
-                << 1.0 / 1000 * duration.count() << " seconds" << std::endl;
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUSOLVER Host To Device: " << eTime << " ms"
+                << std::endl;
     }
 
     throwOnErr(cusolverDnXsyevd_bufferSize(cusolverH, NULL, jobz, uplo, n,
@@ -316,7 +325,7 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
 
     if (TIMINGS) {
       throwOnErr(cudaStreamSynchronize(stream));
-      tStart = std::chrono::high_resolution_clock::now();
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
     throwOnErr(cusolverDnXsyevd(cusolverH, NULL, jobz, uplo, n, cuda_type, d_A,
@@ -324,13 +333,11 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
                                 h_work, h_lwork, d_info));
 
     if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
       throwOnErr(cudaStreamSynchronize(stream));
-      tEnd = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-      std::cerr << "...CUSOLVER SYEVD: " << 1.0 / 1000 * duration.count()
-                << " seconds" << std::endl;
-      tStart = std::chrono::high_resolution_clock::now();
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUSOLVER SYEVD: " << eTime << " ms" << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
     throwOnErr(cudaMemcpyAsync(A, d_A, sizeof(data_type) * n * lda,
@@ -343,18 +350,24 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
     throwOnErr(cudaStreamSynchronize(stream));
 
     if (TIMINGS) {
-      tEnd = std::chrono::high_resolution_clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-      std::cerr << "...CUSOLVER Device To Host: "
-                << 1.0 / 1000 * duration.count() << " seconds" << std::endl;
-      tStart = std::chrono::high_resolution_clock::now();
+      throwOnErr(cudaEventRecord(eEnd, stream));
+      throwOnErr(cudaStreamSynchronize(stream));
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUSOLVER Device To Host: " << eTime << " ms"
+                << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
     }
 
   } catch (std::runtime_error &ex) {
     std::cerr << ex.what() << std::endl;
     *err = 1;
   }
+
+  if (eStart)
+    *err |= cudaEventDestroy(eStart);
+
+  if (eEnd)
+    *err |= cudaEventDestroy(eEnd);
 
   if (d_A)
     *err |= cudaFree(d_A);
@@ -372,8 +385,8 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
     tEnd_total = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         tEnd_total - tStart_total);
-    std::cerr << "...Total time spent in C++ function: "
-              << 1.0 / 1000 * duration.count() << " seconds" << std::endl;
+    std::cerr << "...Total time spent in C++ function: " << duration.count()
+              << " ms" << std::endl;
   }
 }
 
@@ -407,8 +420,8 @@ cuda_context_t cuda_init(int *err) noexcept {
     tEnd = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-    std::cerr << "...Library Initialization: " << 1.0 / 1000 * duration.count()
-              << " seconds" << std::endl;
+    std::cerr << "...Library Initialization: " << duration.count() << " ms"
+              << std::endl;
   }
 
   return reinterpret_cast<cuda_context_t>(context);
@@ -457,8 +470,8 @@ void cuda_finalize(cuda_context_t ctx, int *err) noexcept {
     tEnd = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(tEnd - tStart);
-    std::cerr << "...Library Finalization: " << 1.0 / 1000 * duration.count()
-              << " seconds" << std::endl;
+    std::cerr << "...Library Finalization: " << duration.count() << " ms"
+              << std::endl;
   }
 }
 
