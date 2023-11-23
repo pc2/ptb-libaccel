@@ -23,6 +23,7 @@
 #include "libaccel_cuda.h"
 #include <atomic>
 #include <chrono>
+#include <cuda_runtime.h>
 #include <cusolverDn.h>
 #include <iostream>
 #include <ratio>
