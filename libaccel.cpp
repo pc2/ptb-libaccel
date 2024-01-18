@@ -35,8 +35,8 @@ int load_cuda() noexcept {
   auto handle = dlopen("libaccel_cuda.so", RTLD_NOW);
 
   if (!handle) {
-    std::cerr << "libaccel: Could not open CUDA acceleration library."
-              << std::endl;
+    std::cerr << "libaccel: Could not open CUDA acceleration library: "
+              << dlerror() << std::endl;
     return 1;
   }
 
