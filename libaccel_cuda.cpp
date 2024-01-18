@@ -21,6 +21,7 @@
  */
 
 #include "libaccel_cuda.h"
+#include "cuda_compat.hpp"
 #include <atomic>
 #include <chrono>
 #include <cuda_runtime.h>
