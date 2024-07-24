@@ -391,6 +391,162 @@ static inline void Xsyevd(cuda_context_t ctx, int64_t n, data_type *A,
   }
 }
 
+template <typename data_type>
+static inline void Xsygvd(cuda_context_t ctx, int64_t n, data_type *A, int64_t lda, data_type *B,
+                          int64_t ldb, data_type *W, int *err) noexcept {
+  cudaDataType_t cuda_type = get_cuda_type<data_type>();
+
+  data_type *d_A = nullptr;
+  data_type *d_B = nullptr;
+  data_type *d_W = nullptr;
+  int *d_info = nullptr;
+  int info = 0;
+  size_t d_lwork = 0;
+  void *d_work = nullptr;
+  size_t h_lwork = 0;
+  void *h_work = nullptr;
+
+  decltype(std::chrono::high_resolution_clock::now()) tStart_total, tEnd_total;
+  cudaEvent_t eStart = nullptr;
+  cudaEvent_t eEnd = nullptr;
+  float eTime;
+  *err = 0;
+
+  auto context = restore_ctx(ctx);
+  if (!context) {
+    std::cerr << "libaccel_cuda: Invalid context" << std::endl;
+    *err = 1;
+    return;
+  }
+  auto &cusolverH = context->cusolverH;
+  auto &stream = context->stream;
+
+  cusolverEigType_t itype =
+      CUSOLVER_EIG_TYPE_1;
+  cusolverEigMode_t jobz =
+      CUSOLVER_EIG_MODE_VECTOR; // compute eigenvalues and eigenvectors.
+  cublasFillMode_t uplo = CUBLAS_FILL_MODE_LOWER;
+
+
+  if (TIMINGS) {
+    tStart_total = std::chrono::high_resolution_clock::now();
+  }
+  
+  try {
+    throwOnErr(cudaMalloc(reinterpret_cast<void **>(&d_A),
+                          sizeof(data_type) * n * lda));
+    throwOnErr(cudaMalloc(reinterpret_cast<void **>(&d_B),
+                          sizeof(data_type) * n * ldb));
+    throwOnErr(
+        cudaMalloc(reinterpret_cast<void **>(&d_W), sizeof(data_type) * n));
+    throwOnErr(cudaMalloc(reinterpret_cast<void **>(&d_info), sizeof(int)));
+
+    if (TIMINGS) {
+      throwOnErr(cudaStreamSynchronize(stream));
+      throwOnErr(cudaEventCreate(&eStart));
+      throwOnErr(cudaEventCreate(&eEnd));
+      throwOnErr(cudaEventRecord(eStart, stream));
+    }
+    throwOnErr(cudaMemcpyAsync(d_A, A, sizeof(data_type) * n * lda,
+                               cudaMemcpyHostToDevice, stream));
+    throwOnErr(cudaMemcpyAsync(d_B, B, sizeof(data_type) * n * ldb,
+                               cudaMemcpyHostToDevice, stream));
+    if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
+      throwOnErr(cudaStreamSynchronize(stream));
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUSOLVER Host To Device: " << eTime << " ms"
+                << std::endl;
+
+    }
+
+    throwOnErr(cusolverDnXsygvd_bufferSize(cusolverH, NULL, itype, jobz, uplo, n, 
+                                       cuda_type, d_A, lda, cuda_type, d_B, ldb, 
+                                       cuda_type, d_W, cuda_type, 
+                                       &d_lwork, &h_lwork));
+
+    throwOnErr(cudaMalloc(reinterpret_cast<void **>(&d_work), d_lwork));
+
+
+    throwOnErr(cusolverDnXsygvd(cusolverH, NULL, itype, jobz, uplo, n, cuda_type, d_A,
+                                lda, cuda_type, d_B, ldb, cuda_type, d_W, cuda_type, d_work, d_lwork,
+                                h_work, h_lwork, d_info));
+
+
+    if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
+      throwOnErr(cudaStreamSynchronize(stream));
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUSOLVER SYGVD: " << eTime << " ms" << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
+    }
+
+    throwOnErr(cudaMemcpyAsync(A, d_A, sizeof(data_type) * n * lda,
+                               cudaMemcpyDeviceToHost, stream));
+    throwOnErr(cudaMemcpyAsync(B, d_B, sizeof(data_type) * n * ldb,
+                               cudaMemcpyDeviceToHost, stream));
+    throwOnErr(cudaMemcpyAsync(W, d_W, sizeof(data_type) * n,
+                               cudaMemcpyDeviceToHost, stream));
+    throwOnErr(cudaMemcpyAsync(&info, d_info, sizeof(int),
+                               cudaMemcpyDeviceToHost, stream));
+    
+    if (TIMINGS) {
+      throwOnErr(cudaStreamSynchronize(stream));
+      throwOnErr(cudaEventRecord(eStart, stream));
+    }
+   
+    throwOnErr(cudaStreamSynchronize(stream));
+
+    if (TIMINGS) {
+      throwOnErr(cudaEventRecord(eEnd, stream));
+      throwOnErr(cudaStreamSynchronize(stream));
+      cudaEventElapsedTime(&eTime, eStart, eEnd);
+      std::cerr << "...CUSOLVER Device To Host: " << eTime << " ms"
+                << std::endl;
+      throwOnErr(cudaEventRecord(eStart, stream));
+    }
+
+
+  } catch (std::runtime_error &ex) {
+    std::cerr << ex.what() << std::endl;
+    *err = 1;
+  }
+
+
+  if (eStart)
+    *err |= cudaEventDestroy(eStart);
+
+  if (eEnd)
+    *err |= cudaEventDestroy(eEnd);
+
+  if (d_A)
+    *err |= cudaFree(d_A);
+   
+  if (d_B)
+    *err |= cudaFree(d_B);
+
+  if (d_W)
+    *err |= cudaFree(d_W);
+
+  if (d_info)
+    *err |= cudaFree(d_info);
+
+  if (d_work)
+    *err |= cudaFree(d_work);
+
+
+
+  if (TIMINGS) {
+    tEnd_total = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        tEnd_total - tStart_total);
+    std::cerr << "...Total time spent in C++ function: " << duration.count()
+              << " ms" << std::endl;
+  }
+}
+                    
+
+
 // Public API:
 
 cuda_context_t cuda_init(int *err) noexcept {
@@ -480,10 +636,18 @@ void cuda_dsyevd(cuda_context_t ctx, int64_t n, double *A, int64_t lda,
                  double *W, int *err) noexcept {
   return Xsyevd(ctx, n, A, lda, W, err);
 }
-
 void cuda_ssyevd(cuda_context_t ctx, int64_t n, float *A, int64_t lda, float *W,
                  int *err) noexcept {
   return Xsyevd(ctx, n, A, lda, W, err);
+}
+
+void cuda_ssygvd(cuda_context_t ctx, int64_t n, float *A, int64_t lda,
+                 float *B, int64_t ldb, float *W, int *err) noexcept {
+   return Xsygvd(ctx, n, A, lda, B, ldb, W, err); 
+}
+void cuda_dsygvd(cuda_context_t ctx, int64_t n, double *A, int64_t lda,
+                 double *B, int64_t ldb, double *W, int *err) noexcept {
+   return Xsygvd(ctx, n, A, lda, B, ldb, W, err); 
 }
 
 void cuda_dgemm(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,

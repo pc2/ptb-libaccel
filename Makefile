@@ -1,6 +1,7 @@
 CFLAGS = -O2 -Wall -Wextra -Wshadow -pedantic
 CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -Wshadow -Wnon-virtual-dtor -pedantic
 FCFLAGS  = -O2 -Wall -Wextra -pedantic
+MOD_DIR = ./mod
 
 .PHONY: libs cuda all clean
 
@@ -21,7 +22,7 @@ test_c.o: test_c.c
 	$(CC) $(CFLAGS) -c test_c.c
 
 accel_lib.o: accel_lib.f90
-	$(FC) $(FCFLAGS) -c accel_lib.f90
+	$(FC) $(FCFLAGS) -c accel_lib.f90 -o accel_lib.o -J$(MOD_DIR)
 
 libaccel_cuda.o: libaccel_cuda.cpp libaccel_cuda.h
 	$(CXX) $(CXXFLAGS) -c -fPIC -o libaccel_cuda.o libaccel_cuda.cpp

@@ -25,7 +25,8 @@ module accel_lib
    implicit none
    private
 
-   public :: load_cuda, cuda_context, cuda_init, cuda_finalize, cuda_dsyevd, cuda_ssyevd, cuda_dgemm, cuda_sgemm
+   public :: load_cuda, cuda_context, cuda_init, cuda_finalize 
+   public :: cuda_dsyevd, cuda_ssyevd, cuda_dgemm, cuda_sgemm, cuda_dsygvd, cuda_ssygvd
 
    type cuda_context
       type(c_ptr) :: c_ctx
@@ -53,13 +54,32 @@ module accel_lib
          implicit none
          integer(kind=c_int64_t), intent(in), value :: n, lda
          type(c_ptr), intent(in), value :: ctx, A, W, err
-      end subroutine c_cuda_dsyevd
+      end subroutine c_cuda_dsyevd   
+
       subroutine c_cuda_ssyevd(ctx, n, A, lda, W, err) bind(c, name="cuda_ssyevd")
          use, intrinsic :: iso_c_binding
          implicit none
          integer(kind=c_int64_t), intent(in), value :: n, lda
          type(c_ptr), intent(in), value :: ctx, A, W, err
-      end subroutine c_cuda_ssyevd
+      end subroutine c_cuda_ssyevd   
+
+      subroutine c_cuda_ssygvd(ctx, n, A, lda, B, ldb, W, err) bind(c, name="cuda_ssygvd")
+         use, intrinsic :: iso_c_binding
+         implicit none
+         type(c_ptr), intent(in), value :: ctx
+         integer(kind=c_int64_t), intent(in), value :: n, lda, ldb
+         type(c_ptr), intent(in), value :: A, B, W, err   
+      end subroutine c_cuda_ssygvd
+           
+      subroutine c_cuda_dsygvd(ctx, n, A, lda, B, ldb, W, err) bind(c, name="cuda_dsygvd")
+         use, intrinsic :: iso_c_binding
+         implicit none
+         type(c_ptr), intent(in), value :: ctx
+         integer(kind=c_int64_t), intent(in), value :: n, lda, ldb
+         type(c_ptr), intent(in), value :: A, B, W, err   
+      end subroutine c_cuda_dsygvd
+
+ 
       subroutine c_cuda_dgemm(ctx, trans_a, trans_b, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc, err) bind(c, name="cuda_dgemm")
          use, intrinsic :: iso_c_binding
          implicit none
@@ -76,6 +96,7 @@ module accel_lib
          real(kind=c_float), intent(in), value :: alpha, beta
          type(c_ptr), intent(in), value :: ctx, A, B, C, err
       end subroutine c_cuda_sgemm
+
    end interface
 
 contains
@@ -106,7 +127,7 @@ contains
       integer(kind=c_int), target, intent(out) :: err
 
       call c_cuda_dsyevd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n, kind=c_int64_t), c_loc(W), c_loc(err))
-   end subroutine cuda_dsyevd
+   end subroutine cuda_dsyevd  
 
    subroutine cuda_ssyevd(ctx, n, A, W, err)
       type(cuda_context), intent(in) :: ctx
@@ -117,6 +138,30 @@ contains
 
       call c_cuda_ssyevd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n, kind=c_int64_t), c_loc(W), c_loc(err))
    end subroutine cuda_ssyevd
+
+   subroutine cuda_ssygvd(ctx, n, A, B, W, err)
+      type(cuda_context), intent(in) :: ctx
+      integer(kind=int32), intent(in) :: n
+      real(kind=c_float), dimension(n, n), target, intent(inout) :: A
+      real(kind=c_float), dimension(n, n), target, intent(inout) :: B
+      real(kind=c_float), dimension(n), target, intent(out) :: W
+      integer(kind=c_int), target, intent(out) :: err
+      
+      call c_cuda_ssygvd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n,kind=c_int64_t), c_loc(B), &
+                                                               int(n, kind=c_int64_t), c_loc(W), c_loc(err))
+   end subroutine cuda_ssygvd
+
+   subroutine cuda_dsygvd(ctx, n, A, B, W, err)
+      type(cuda_context), intent(in) :: ctx
+      integer(kind=int32), intent(in) :: n
+      real(kind=c_double), dimension(n, n), target, intent(inout) :: A
+      real(kind=c_double), dimension(n, n), target, intent(inout) :: B
+      real(kind=c_double), dimension(n), target, intent(out) :: W
+      integer(kind=c_int), target, intent(out) :: err
+      
+      call c_cuda_dsygvd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n,kind=c_int64_t), c_loc(B), &
+                                                               int(n, kind=c_int64_t), c_loc(W), c_loc(err))
+   end subroutine cuda_dsygvd
 
    subroutine cuda_dgemm(ctx, trans_a, trans_b, m, n, k, alpha, A, B, beta, C, err)
       type(cuda_context), intent(in) :: ctx

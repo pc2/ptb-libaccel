@@ -40,6 +40,11 @@ void cuda_dsyevd(cuda_context_t ctx, int64_t n, double *A, int64_t lda,
 void cuda_ssyevd(cuda_context_t ctx, int64_t n, float *A, int64_t lda, float *W,
                  int *err) noexcept;
 
+void cuda_ssygvd(cuda_context_t ctx, int64_t n, float *A, int64_t lda,
+                 float *B, int64_t ldb, float *W, int *err) noexcept;
+void cuda_dsygvd(cuda_context_t ctx, int64_t n, double *A, int64_t lda,
+                 double *B, int64_t ldb, double *W, int *err) noexcept;
+
 void cuda_dgemm(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
                 int64_t n, int64_t k, double alpha, const double *A,
                 int64_t lda, const double *B, int64_t ldb, double beta,

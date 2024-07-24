@@ -28,6 +28,8 @@ static decltype(cuda_init) *cuda_init_fn = nullptr;
 static decltype(cuda_finalize) *cuda_finalize_fn = nullptr;
 static decltype(cuda_dsyevd) *cuda_dsyevd_fn = nullptr;
 static decltype(cuda_ssyevd) *cuda_ssyevd_fn = nullptr;
+static decltype(cuda_ssygvd) *cuda_ssygvd_fn = nullptr;
+static decltype(cuda_dsygvd) *cuda_dsygvd_fn = nullptr;
 static decltype(cuda_dgemm) *cuda_dgemm_fn = nullptr;
 static decltype(cuda_sgemm) *cuda_sgemm_fn = nullptr;
 
@@ -53,6 +55,12 @@ int load_cuda() noexcept {
   cuda_ssyevd_fn =
       reinterpret_cast<decltype(cuda_ssyevd_fn)>(dlsym(handle, "cuda_ssyevd"));
   err |= !cuda_ssyevd_fn;
+  cuda_ssygvd_fn =
+      reinterpret_cast<decltype(cuda_ssygvd_fn)>(dlsym(handle, "cuda_ssygvd"));
+  err |= !cuda_ssygvd_fn;
+  cuda_dsygvd_fn =
+      reinterpret_cast<decltype(cuda_dsygvd_fn)>(dlsym(handle, "cuda_dsygvd"));
+  err |= !cuda_dsygvd_fn;
   cuda_dgemm_fn =
       reinterpret_cast<decltype(cuda_dgemm_fn)>(dlsym(handle, "cuda_dgemm"));
   err |= !cuda_dgemm_fn;
@@ -94,6 +102,7 @@ void cuda_dsyevd(cuda_context_t ctx, int64_t n, double *A, int64_t lda,
   return cuda_dsyevd_fn(ctx, n, A, lda, W, err);
 }
 
+
 void cuda_ssyevd(cuda_context_t ctx, int64_t n, float *A, int64_t lda, float *W,
                  int *err) noexcept {
   if (!cuda_ssyevd_fn) {
@@ -101,6 +110,27 @@ void cuda_ssyevd(cuda_context_t ctx, int64_t n, float *A, int64_t lda, float *W,
     *err = 1;
   }
   return cuda_ssyevd_fn(ctx, n, A, lda, W, err);
+}
+
+
+void cuda_ssygvd(cuda_context_t ctx, int64_t n, float *A, int64_t lda,
+                 float *B, int64_t ldb, float *W, int *err) noexcept {
+   if (!cuda_dsygvd_fn) {
+      std::cerr<< "libaccel: CUDA library not loaded." << std::endl;
+      *err = 1;
+   }
+   return cuda_ssygvd_fn(ctx, n, A, lda, B, ldb, W, err);
+   abort();
+}
+
+void cuda_dsygvd(cuda_context_t ctx, int64_t n, double *A, int64_t lda,
+                 double *B, int64_t ldb, double *W, int *err) noexcept {
+   if (!cuda_dsygvd_fn) {
+      std::cerr<< "libaccel: CUDA library not loaded." << std::endl;
+      *err = 1;
+   }
+   return cuda_dsygvd_fn(ctx, n, A, lda, B, ldb, W, err);
+   abort();
 }
 
 void cuda_dgemm(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
