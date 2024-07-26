@@ -459,11 +459,10 @@ static inline void Xsygvd(cuda_context_t ctx, int64_t n, data_type *A, int64_t l
                 << std::endl;
 
     }
-
     throwOnErr(cusolverDnXsygvd_bufferSize(cusolverH, NULL, itype, jobz, uplo, n, 
-                                       cuda_type, d_A, lda, cuda_type, d_B, ldb, 
-                                       cuda_type, d_W, cuda_type, 
-                                       &d_lwork, &h_lwork));
+                                cuda_type, d_A, lda, cuda_type, d_B, ldb, 
+                                cuda_type, d_W, cuda_type, 
+                                &d_lwork, &h_lwork));
 
     throwOnErr(cudaMalloc(reinterpret_cast<void **>(&d_work), d_lwork));
 
