@@ -21,7 +21,7 @@
 program test
 
    use accel_lib
-   use, intrinsic :: iso_fortran_env, only: real64, real32, int32
+   use, intrinsic :: iso_fortran_env, only: real64, real32, int32, int64
    implicit none
 
    integer, parameter :: dim = 1024
