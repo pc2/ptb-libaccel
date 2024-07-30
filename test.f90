@@ -21,7 +21,7 @@
 program test
 
    use accel_lib
-   use, intrinsic :: iso_fortran_env, only: real64, real32, int32
+   use, intrinsic :: iso_fortran_env, only: real64, real32, int32, int64
    implicit none
 
    integer, parameter :: dim = 1024
@@ -32,10 +32,16 @@ program test
    ! For testing cuda_dsyevd
    real(kind=real64), dimension(3, 3) :: A
    real(kind=real64), dimension(3) :: W
+   
+   ! For testing cuda_dsygvd
+   real(kind=real64), dimension(3, 3) :: S
 
    ! For testing syevd
    real(kind=real32), dimension(3, 3) :: Asp
    real(kind=real32), dimension(3) :: Wsp
+   
+   ! For testing sygvd
+   real(kind=real32), dimension(3, 3) :: Ssp
 
    ! For testing cuda_dgemm
    real(kind=real64), dimension(2, 3) :: X
@@ -210,10 +216,59 @@ program test
 
    deallocate (M, Minv, eigvecs, identity, eigvals)
 
+   print *
+   print *, "########################################"
+   print *, "# Generalized Eigenvalue Decomposition #"
+   print *, "########################################"
+   print *
+
+   A = reshape((/3.5, 0.5, 0.0, 0.5, 3.5, 0.0, 0.0, 0.0, 2.0/), shape(A))
+   Asp = REAL(A, kind=real32)
+   
+   S = reshape((/2.0, 0.5, 0.0, 0.5, 3.0, 0.0, 0.0, 0.0, 4.0/), shape(S))
+   Ssp = REAL(S, kind=real32)
+
+   print *, "Input matrix A:"
+   call print_matrix64(A)
+   print *
+   
+   print *, "Input matrix S:"
+   call print_matrix64(S)
+   print *
+
+   call cuda_dsygvd(ctx, 3, A, S, W, err)
+
+   if (err /= 0) then
+      stop "An error occured in the CUDA accelerated code."
+   end if
+
+   print *, "Eigenvectors (double prec):"
+   call print_matrix64(A)
+   print *
+
+   print *, "Eigenvalues (double prec):"
+   print *, W
+   print *
+
+   call cuda_ssygvd(ctx, 3, Asp, Ssp, Wsp, err)
+
+   if (err /= 0) then
+      stop "An error occured in the CUDA accelerated code."
+   end if
+
+   print *, "Eigenvectors (single prec):"
+   call print_matrix32(Asp)
+   print *
+
+   print *, "Eigenvalues (single prec):"
+   print *, Wsp
+   print *
+   
    call cuda_finalize(ctx, err)
    if (err /= 0) then
       stop "An error occured in finalize."
    end if
+   
 
 contains
 

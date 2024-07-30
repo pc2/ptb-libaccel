@@ -107,7 +107,7 @@ contains
    end function load_cuda
 
    function cuda_init(err) result(ctx)
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
       type(cuda_context) :: ctx
 
       ctx%c_ctx = c_cuda_init(c_loc(err))
@@ -115,37 +115,37 @@ contains
 
    subroutine cuda_finalize(ctx, err)
       type(cuda_context), intent(in) :: ctx
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
       call c_cuda_finalize(ctx%c_ctx, c_loc(err))
    end subroutine cuda_finalize
 
    subroutine cuda_dsyevd(ctx, n, A, W, err)
       type(cuda_context), intent(in) :: ctx
-      integer(kind=int32), intent(in) :: n
+      integer(kind=int64), intent(in) :: n
       real(kind=c_double), dimension(n, n), target, intent(inout) :: A
       real(kind=c_double), dimension(n), target, intent(out) :: W
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
 
       call c_cuda_dsyevd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n, kind=c_int64_t), c_loc(W), c_loc(err))
    end subroutine cuda_dsyevd  
 
    subroutine cuda_ssyevd(ctx, n, A, W, err)
       type(cuda_context), intent(in) :: ctx
-      integer(kind=int32), intent(in) :: n
+      integer(kind=int64), intent(in) :: n
       real(kind=c_float), dimension(n, n), target, intent(inout) :: A
       real(kind=c_float), dimension(n), target, intent(out) :: W
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
 
       call c_cuda_ssyevd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n, kind=c_int64_t), c_loc(W), c_loc(err))
    end subroutine cuda_ssyevd
 
    subroutine cuda_ssygvd(ctx, n, A, B, W, err)
       type(cuda_context), intent(in) :: ctx
-      integer(kind=int32), intent(in) :: n
+      integer(kind=int64), intent(in) :: n
       real(kind=c_float), dimension(n, n), target, intent(inout) :: A
       real(kind=c_float), dimension(n, n), target, intent(inout) :: B
       real(kind=c_float), dimension(n), target, intent(out) :: W
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
       
       call c_cuda_ssygvd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n,kind=c_int64_t), c_loc(B), &
                                                                int(n, kind=c_int64_t), c_loc(W), c_loc(err))
@@ -153,11 +153,11 @@ contains
 
    subroutine cuda_dsygvd(ctx, n, A, B, W, err)
       type(cuda_context), intent(in) :: ctx
-      integer(kind=int32), intent(in) :: n
+      integer(kind=int64), intent(in) :: n
       real(kind=c_double), dimension(n, n), target, intent(inout) :: A
       real(kind=c_double), dimension(n, n), target, intent(inout) :: B
       real(kind=c_double), dimension(n), target, intent(out) :: W
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
       
       call c_cuda_dsygvd(ctx%c_ctx, int(n, kind=c_int64_t), c_loc(A), int(n,kind=c_int64_t), c_loc(B), &
                                                                int(n, kind=c_int64_t), c_loc(W), c_loc(err))
@@ -166,12 +166,12 @@ contains
    subroutine cuda_dgemm(ctx, trans_a, trans_b, m, n, k, alpha, A, B, beta, C, err)
       type(cuda_context), intent(in) :: ctx
       character, intent(in) :: trans_a, trans_b
-      integer(kind=int32), intent(in) :: m, n, k
+      integer(kind=int64), intent(in) :: m, n, k
       real(kind=c_double), intent(in) :: alpha, beta
       real(kind=c_double), dimension(m, k), target, intent(in) :: A
       real(kind=c_double), dimension(k, n), target, intent(in) :: B
       real(kind=c_double), dimension(m, n), target, intent(inout) :: C
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
 
       call c_cuda_dgemm(ctx%c_ctx, ichar(trans_a, kind=c_signed_char), ichar(trans_b, kind=c_signed_char), &
                         int(m, kind=c_int64_t), int(n, kind=c_int64_t), int(k, kind=c_int64_t), alpha, c_loc(A), &
@@ -182,12 +182,12 @@ contains
    subroutine cuda_sgemm(ctx, trans_a, trans_b, m, n, k, alpha, A, B, beta, C, err)
       type(cuda_context), intent(in) :: ctx
       character, intent(in) :: trans_a, trans_b
-      integer(kind=int32), intent(in) :: m, n, k
+      integer(kind=int64), intent(in) :: m, n, k
       real(kind=c_float), intent(in) :: alpha, beta
       real(kind=c_float), dimension(m, k), target, intent(in) :: A
       real(kind=c_float), dimension(k, n), target, intent(in) :: B
       real(kind=c_float), dimension(m, n), target, intent(inout) :: C
-      integer(kind=c_int), target, intent(out) :: err
+      integer(kind=int32), target, intent(out) :: err
 
       call c_cuda_sgemm(ctx%c_ctx, ichar(trans_a, kind=c_signed_char), ichar(trans_b, kind=c_signed_char), &
                         int(m, kind=c_int64_t), int(n, kind=c_int64_t), int(k, kind=c_int64_t), alpha, c_loc(A), &
