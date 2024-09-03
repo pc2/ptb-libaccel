@@ -23,6 +23,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <cublas_v2.h>
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +55,14 @@ void cuda_sgemm(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
                 int64_t n, int64_t k, float alpha, const float *A, int64_t lda,
                 const float *B, int64_t ldb, float beta, float *C, int64_t ldc,
                 int *err) noexcept;
+
+void cuda_gemm_ex(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
+                  int64_t n, int64_t k, const void *alpha, const void *A,
+                  int64_t lda, int32_t Atype, const void *B, int64_t ldb,
+                  int32_t Btype, const void *beta, void *C, int64_t ldc,
+                  int32_t Ctype, int32_t computeType, 
+                  int32_t algo, int32_t *err) noexcept;
+
 
 #ifdef __cplusplus
 }

@@ -118,7 +118,7 @@ cusolverStatus_t CUSOLVERAPI static cusolverDnXsygvd(
   cusolverStatus_t ret;
 
   if (dataTypeA == CUDA_R_32F && dataTypeB == CUDA_R_32F && dataTypeW == CUDA_R_32F) {
-
+    printf("Executing cusolverDnSsygvd for single precision (float).\n");
     ret = cusolverDnSsygvd(
         handle, itype, jobz, uplo, static_cast<int>(n), static_cast<float *>(A),
         static_cast<int>(lda), static_cast<float *>(B), static_cast<int>(ldb), 
@@ -126,8 +126,8 @@ cusolverStatus_t CUSOLVERAPI static cusolverDnXsygvd(
         static_cast<int>(workspaceInBytesOnDevice / sizeof(float)), info);
 
   } else if (dataTypeA == CUDA_R_64F && dataTypeB == CUDA_R_64F && dataTypeW == CUDA_R_64F) {
+    printf("Executing cusolverDnDsygvd for double precision (double).\n");
     ret = cusolverDnDsygvd(
-
         handle, itype, jobz, uplo, static_cast<int>(n), static_cast<double *>(A),
         static_cast<int>(lda), static_cast<double *>(B), static_cast<int>(ldb), 
         static_cast<double *>(W),static_cast<double *>(bufferOnDevice),

@@ -30,6 +30,72 @@
 #include <ratio>
 #include <stdexcept>
 #include <type_traits>
+#include <cuda_fp16.h>
+
+
+
+
+cudaDataType_t convertToCudaDataType(int fortranType) {
+  switch (fortranType) {
+    case 0: return CUDA_R_32F;
+    case 1: return CUDA_R_64F;
+    case 2: return CUDA_R_16F;
+    default:
+      throw std::runtime_error("Invalid data type passed from Fortran.");
+  }
+}
+
+cublasComputeType_t convertToCublasComputeType(int fortranComputeType) {
+  switch (fortranComputeType) {
+    case 63: return CUBLAS_COMPUTE_16F;
+    case 64: return CUBLAS_COMPUTE_32F;
+    case 65: return CUBLAS_COMPUTE_64F;
+
+    default:
+      throw std::runtime_error("Invalid compute type passed from Fortran.");
+  }
+}
+
+cublasGemmAlgo_t convertToCublasGemmAlgo(int fortranAlgo) {
+  switch (fortranAlgo) {
+    case -1: return CUBLAS_GEMM_DFALT;
+    // Add other cases as needed for different algorithms
+    default:
+      throw std::runtime_error("Invalid algorithm type passed from Fortran.");
+  }
+}
+
+
+template <typename T>
+void printType(const char* name) {
+    if (std::is_same<T, float>::value) {
+        std::cout << name << " is of type float" << std::endl;
+    } else if (std::is_same<T, double>::value) {
+        std::cout << name << " is of type double" << std::endl;
+    } else if (std::is_same<T, __half>::value) {
+        std::cout << name << " is of type __half" << std::endl;
+    } else {
+        std::cout << name << " is of unknown type: " << typeid(T).name() << std::endl;
+    }
+}
+
+
+size_t getCudaDataTypeSize(cudaDataType_t type) {
+    switch (type) {
+        case CUDA_R_32F: return sizeof(float);
+        case CUDA_R_64F: return sizeof(double);
+        case CUDA_R_16F: return 2;  // sizeof(half) is typically 2 bytes
+        case CUDA_R_8I: return 1;   // 8-bit integer
+        case CUDA_R_8U: return 1;   // 8-bit unsigned integer
+        case CUDA_R_16U: return 2;  // 16-bit unsigned integer
+        case CUDA_R_32U: return 4;  // 32-bit unsigned integer
+        case CUDA_R_32I: return 4;  // 32-bit integer
+        case CUDA_R_64U: return 8;  // 64-bit unsigned integer
+        case CUDA_R_64I: return 8;  // 64-bit integer
+        default:
+            throw std::runtime_error("Unsupported CUDA data type.");
+    }
+}
 
 constexpr bool TIMINGS = true;
 
@@ -105,6 +171,71 @@ static void printMatrix_colMajor(size_t m, size_t n, T *A) {
     std::cout << std::endl;
   }
 }
+
+
+template <typename alpha_beta_type>
+static inline void XgemmEx(cuda_context_t ctx, char trans_a, char trans_b,
+                           int64_t m, int64_t n, int64_t k, 
+                           const alpha_beta_type* alpha, const void* A, int64_t lda, cudaDataType_t Atype,
+                           const void* B, int64_t ldb, cudaDataType_t Btype, 
+                           const alpha_beta_type* beta, void* C, int64_t ldc, cudaDataType_t Ctype, 
+                           cublasComputeType_t computeType, cublasGemmAlgo_t algo, 
+                           int* err) noexcept {
+
+    cublasOperation_t transa;
+    cublasOperation_t transb;
+
+    void* d_A = nullptr;
+    void* d_B = nullptr;
+    void* d_C = nullptr;
+
+    *err = 0;
+
+    auto context = restore_ctx(ctx);
+    if (!context) {
+        std::cerr << "libaccel_cuda: Invalid context" << std::endl;
+        *err = 1;
+        return;
+    }
+
+
+    auto& cublasH = context->cublasH;
+    auto& stream = context->stream;
+
+    try {
+        transa = cublasOpFromChr(trans_a);
+        transb = cublasOpFromChr(trans_b);
+
+        throwOnErr(cudaMalloc(&d_A, lda * k * getCudaDataTypeSize(Atype)));
+        throwOnErr(cudaMalloc(&d_B, ldb * n * getCudaDataTypeSize(Btype)));
+        throwOnErr(cudaMalloc(&d_C, ldc * n * getCudaDataTypeSize(Ctype)));
+
+        throwOnErr(cudaMemcpyAsync(d_A, A, lda * k * getCudaDataTypeSize(Atype), cudaMemcpyHostToDevice, stream));
+        throwOnErr(cudaMemcpyAsync(d_B, B, ldb * n * getCudaDataTypeSize(Btype), cudaMemcpyHostToDevice, stream));
+        throwOnErr(cudaMemcpyAsync(d_C, C, ldc * n * getCudaDataTypeSize(Ctype), cudaMemcpyHostToDevice, stream));
+
+        throwOnErr(cublasGemmEx(cublasH, transa, transb, static_cast<int>(m), static_cast<int>(n), static_cast<int>(k),
+                                alpha, d_A, Atype, static_cast<int>(lda),
+                                d_B, Btype, static_cast<int>(ldb),
+                                beta, d_C, Ctype, static_cast<int>(ldc),
+                                computeType, algo));
+
+        // Copy result back to host
+        throwOnErr(cudaMemcpyAsync(C, d_C, ldc * n * getCudaDataTypeSize(Ctype), cudaMemcpyDeviceToHost, stream));
+        throwOnErr(cudaStreamSynchronize(stream));
+
+    } catch (std::runtime_error& ex) {
+        std::cerr << ex.what() << std::endl;
+        *err = 1;
+    }
+
+    // Free device memory
+    if (d_A) cudaFree(d_A);
+    if (d_B) cudaFree(d_B);
+    if (d_C) cudaFree(d_C);
+}
+
+
 
 template <typename data_type>
 static inline void Xgemm(cuda_context_t ctx, char trans_a, char trans_b,
@@ -663,4 +794,39 @@ void cuda_sgemm(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
                 int *err) noexcept {
   return Xgemm(ctx, trans_a, trans_b, m, n, k, alpha, A, lda, B, ldb, beta, C,
                ldc, err);
+}
+
+void cuda_gemm_ex(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
+                  int64_t n, int64_t k, const void* alpha, const void* A,
+                  int64_t lda, int32_t Atype, const void* B, int64_t ldb,
+                  int32_t Btype, const void* beta, void* C, int64_t ldc,
+                  int32_t Ctype, int32_t computeType, 
+                  int32_t algo, int* err) noexcept {
+
+    // Convert Fortran types to CUDA types
+    cudaDataType_t cudaAtype = convertToCudaDataType(Atype);
+    cudaDataType_t cudaBtype = convertToCudaDataType(Btype);
+    cudaDataType_t cudaCtype = convertToCudaDataType(Ctype);
+    cublasComputeType_t cudaComputeType = convertToCublasComputeType(computeType);
+    cublasGemmAlgo_t cudaAlgo = convertToCublasGemmAlgo(algo);
+
+    if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
+        XgemmEx<float>(ctx, trans_a, trans_b, m, n, k, 
+                       static_cast<const float*>(alpha), A, lda, cudaAtype,
+                       B, ldb, cudaBtype, static_cast<const float*>(beta), 
+                       C, ldc, cudaCtype, cudaComputeType, cudaAlgo, err);
+    } else if (Atype == CUDA_R_64F && Btype == CUDA_R_64F && Ctype == CUDA_R_64F) {
+        XgemmEx<double>(ctx, trans_a, trans_b, m, n, k, 
+                        static_cast<const double*>(alpha), A, lda, cudaAtype,
+                        B, ldb, cudaBtype, static_cast<const double*>(beta), 
+                        C, ldc, cudaCtype, cudaComputeType, cudaAlgo, err);
+    } else if (Atype == CUDA_R_16F && Btype == CUDA_R_16F && Ctype == CUDA_R_16F) {
+        XgemmEx<__half>(ctx, trans_a, trans_b, m, n, k, 
+                    static_cast<const __half*>(alpha), A, lda, cudaAtype,
+                    B, ldb, cudaBtype, static_cast<const __half*>(beta), 
+                    C, ldc, cudaCtype, cudaComputeType, cudaAlgo, err);
+    } else {
+        std::cerr << "Unsupported data types for cuda_gemm_ex" << std::endl;
+        *err = 1;
+    }
 }

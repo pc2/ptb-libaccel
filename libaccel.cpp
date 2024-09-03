@@ -23,6 +23,9 @@
 #include "libaccel.h"
 #include <dlfcn.h>
 #include <iostream>
+#include <stdexcept>
+
+
 
 static decltype(cuda_init) *cuda_init_fn = nullptr;
 static decltype(cuda_finalize) *cuda_finalize_fn = nullptr;
@@ -32,6 +35,7 @@ static decltype(cuda_ssygvd) *cuda_ssygvd_fn = nullptr;
 static decltype(cuda_dsygvd) *cuda_dsygvd_fn = nullptr;
 static decltype(cuda_dgemm) *cuda_dgemm_fn = nullptr;
 static decltype(cuda_sgemm) *cuda_sgemm_fn = nullptr;
+static decltype(cuda_gemm_ex) *cuda_gemm_ex_fn = nullptr;
 
 int load_cuda() noexcept {
   auto handle = dlopen("libaccel_cuda.so", RTLD_NOW);
@@ -67,6 +71,9 @@ int load_cuda() noexcept {
   cuda_sgemm_fn =
       reinterpret_cast<decltype(cuda_sgemm_fn)>(dlsym(handle, "cuda_sgemm"));
   err |= !cuda_sgemm_fn;
+  cuda_gemm_ex_fn =
+      reinterpret_cast<decltype(cuda_gemm_ex_fn)>(dlsym(handle, "cuda_gemm_ex"));
+  err |= !cuda_gemm_ex_fn;
 
   if (err) {
     std::cerr << "libaccel: Error resolving required symbols." << std::endl;
@@ -156,3 +163,23 @@ void cuda_sgemm(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
   return cuda_sgemm_fn(ctx, trans_a, trans_b, m, n, k, alpha, A, lda, B, ldb,
                        beta, C, ldc, err);
 }
+
+void cuda_gemm_ex(cuda_context_t ctx, char trans_a, char trans_b, int64_t m,
+                  int64_t n, int64_t k, const void *alpha, const void *A,
+                  int64_t lda, int32_t Atype, const void *B, int64_t ldb,
+                  int32_t Btype, const void *beta, void *C, int64_t ldc,
+                  int32_t Ctype, int32_t computeType, 
+                  int32_t algo, int *err) noexcept {
+  if (!cuda_gemm_ex_fn) {
+    std::cerr << "libaccel: CUDA library not loaded." << std::endl;
+    *err = 1;
+    return;
+  }
+
+
+    // Call the actual cuBLAS function
+    return cuda_gemm_ex_fn(ctx, trans_a, trans_b, m, n, k, alpha, A, lda, 
+                           Atype, B, ldb, Btype, beta, C, ldc, 
+                           Ctype, computeType, algo, err);
+}
+

@@ -27,10 +27,23 @@ module accel_lib
 
    public :: load_cuda, cuda_context, cuda_init, cuda_finalize 
    public :: cuda_dsyevd, cuda_ssyevd, cuda_dgemm, cuda_sgemm, cuda_dsygvd, cuda_ssygvd
+   public :: cuda_gemmEx
 
    type cuda_context
       type(c_ptr) :: c_ctx
    end type cuda_context
+
+   ! Define constants for CUDA data types
+   integer(kind=int32), parameter, public :: R_16F = 2
+   integer(kind=int32), parameter, public :: R_32F = 0
+   integer(kind=int32), parameter, public :: R_64F = 1
+
+   ! Define constants for cublasComputeType_t and cublasGemmAlgo_t
+   integer(kind=int32), parameter, public :: COMPUTE_16F = 63
+   integer(kind=int32), parameter, public :: COMPUTE_32F = 64
+   integer(kind=int32), parameter, public :: COMPUTE_64F = 65
+   integer(kind=int32), parameter, public :: GEMM_DEFAULT = -1
+
 
    interface
       function c_load_cuda() result(err) bind(c, name="load_cuda")
@@ -88,6 +101,7 @@ module accel_lib
          real(kind=c_double), intent(in), value :: alpha, beta
          type(c_ptr), intent(in), value :: ctx, A, B, C, err
       end subroutine c_cuda_dgemm
+      
       subroutine c_cuda_sgemm(ctx, trans_a, trans_b, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc, err) bind(c, name="cuda_sgemm")
          use, intrinsic :: iso_c_binding
          implicit none
@@ -96,6 +110,17 @@ module accel_lib
          real(kind=c_float), intent(in), value :: alpha, beta
          type(c_ptr), intent(in), value :: ctx, A, B, C, err
       end subroutine c_cuda_sgemm
+
+      subroutine c_cuda_gemmEx(ctx, trans_a, trans_b, m, n, k, alpha, A, Atype, lda, B, Btype, ldb, beta, C, Ctype, ldc, computeType, algo, err) bind(c, name="cuda_gemm_ex")
+         use, intrinsic :: iso_c_binding
+         implicit none
+         type(c_ptr), intent(in), value :: ctx
+         integer(kind=c_signed_char), intent(in), value :: trans_a, trans_b
+         integer(kind=c_int64_t), intent(in), value :: m, n, k, lda, ldb, ldc
+         type(c_ptr), intent(in), value :: A, B, C
+         type(c_ptr), intent(in), value :: alpha, beta, err
+         integer(kind=c_int32_t), intent(in), value :: Atype, Btype, Ctype, computeType, algo
+       end subroutine c_cuda_gemmEx
 
    end interface
 
@@ -194,5 +219,26 @@ contains
                         int(m, kind=c_int64_t), c_loc(B), int(k, kind=c_int64_t), beta, c_loc(C), int(m, kind=c_int64_t), &
                         c_loc(err))
    end subroutine cuda_sgemm
+
+
+   subroutine cuda_gemmEx(ctx, trans_a, trans_b, m, n, k, alpha, A, B, beta, C, Atype, Btype, Ctype, computeType, algo, err)
+      type(cuda_context), intent(in) :: ctx
+      character, intent(in) :: trans_a, trans_b
+      integer(kind=int64), intent(in) :: m, n, k
+      real(kind=c_), target, intent(in) :: alpha, beta
+      real(kind=c_double), dimension(:,:), target, intent(in) :: A, B
+      real(kind=c_double), dimension(:,:), target, intent(inout) :: C
+      integer(kind=int32), target, intent(out) :: err
+      integer(kind=int32), intent(in) :: Atype, Btype, Ctype, computeType, algo
+      
+      ! Call the C function with all necessary parameters
+      call c_cuda_gemmEx(ctx%c_ctx, ichar(trans_a, kind=c_signed_char), ichar(trans_b, kind=c_signed_char), &
+                         int(m, kind=c_int64_t), int(n, kind=c_int64_t), int(k, kind=c_int64_t), &
+                         c_loc(alpha), c_loc(A),  int(m, kind=c_int64_t), int(Atype, kind=c_int32_t),&
+                         c_loc(B), int(k, kind=c_int64_t),  int(Btype, kind=c_int32_t), &
+                         c_loc(beta), c_loc(C), int(m, kind=c_int64_t), int(Ctype, kind=c_int32_t), &
+                         int(computeType,kind=c_int32_t), int(algo, kind=c_int32_t), c_loc(err))
+   end subroutine cuda_gemmEx
+   
 
 end module accel_lib

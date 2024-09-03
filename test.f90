@@ -53,6 +53,11 @@ program test
    real(kind=real32), dimension(3, 4) :: Ysp
    real(kind=real32), dimension(2, 4) :: Zsp
 
+   ! For testing cuda_gemmEx
+   real(kind=real32), dimension(2, 3) :: Xspp
+   real(kind=real32), dimension(3, 4) :: Yspp
+   real(kind=real32), dimension(2, 4) :: Zspp
+
    ! For matrix inversion test
    real(kind=real64), dimension(:, :), allocatable :: M, Minv, eigvecs, identity
    real(kind=real64), dimension(:), allocatable :: eigvals
@@ -128,6 +133,10 @@ program test
    Ysp = REAL(Y, kind=real32)
    Zsp = REAL(Z, kind=real32)
 
+   Xspp = REAL(X, kind=real32)
+   Yspp = REAL(Y, kind=real32)
+   Zspp = REAL(Z, kind=real32)
+
    print *, "Input matrix X:"
    call print_matrix64(X)
    print *
@@ -156,6 +165,21 @@ program test
 
    print *, "1.5 * X * Y - 0.3 * Z (single prec):"
    call print_matrix32(Zsp)
+   print *
+
+   X = reshape((/1, 2, 3, 4, 5, 6/), shape(X))
+   Y = reshape((/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/), shape(Y))
+   Z = reshape((/1, 2, 3, 4, 5, 6, 7, 8/), shape(Z))
+
+   call cuda_gemmEx(anotherctx, 'N', 'N', 2, 4, 3, 1.5_real64, X, Y, -0.3_real64, Z, R_64F, R_64F, R_64F,&
+                   COMPUTE_64F, GEMM_DEFAULT, err)
+
+   if (err /= 0) then
+      stop "An error occured in the CUDA accelerated code."
+   end if
+
+   print *, "1.5 * X * Y - 0.3 * Z (mixed prec):"
+   call print_matrix64(Z)
    print *
 
    call cuda_finalize(anotherctx, err)

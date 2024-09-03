@@ -3,7 +3,7 @@ FC=ifx
 CXX=icx
 CFLAGS = -O2 -Wall -Wextra -Wshadow -pedantic
 CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -Wshadow -Wnon-virtual-dtor -pedantic -fPIC
-FCFLAGS  = -O2 -fPI -i8
+FCFLAGS  = -O2 -fPIC -i8
 LIBS=-lifcore -lifport -lstdc++
 LIBS_CUDA=-lcusolver -lcublas -lcudart
 MOD_DIR = ./mod
